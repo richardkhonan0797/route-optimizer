@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rute}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Isi POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-rute_antar}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  setup:
+    build:
+      context: .
+      target: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rute}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rute_antar}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run admin:create"]
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rute}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rute_antar}?schema=public
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      SESSION_SECRET: ${SESSION_SECRET:?Isi SESSION_SECRET minimal 32 karakter}
+      ORS_API_KEY: ${ORS_API_KEY:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+volumes:
+  database:

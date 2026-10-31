@@ -1,0 +1,83 @@
+# Dependencies and package-manager caches (keep lockfiles committed)
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+.pnp.*
+
+# Next.js and generated build output
+.next/
+/out/
+/dist/
+/build/
+/next-env.d.ts
+*.tsbuildinfo
+.vercel/
+.turbo/
+.cache/
+.eslintcache
+.stylelintcache
+
+# Local environment and credentials (commit only sanitized examples)
+.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+.ssh/
+/secrets/
+
+# Logs, runtime files, and test reports
+*.log
+logs/
+*.pid
+*.pid.lock
+report.*.json
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Local database files and backups; keep Prisma schemas and migrations
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+/backups/
+/pgdata/
+
+# Temporary files
+.tmp/
+tmp/
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Machine-specific editor and OS files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.suo
+*.user
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/

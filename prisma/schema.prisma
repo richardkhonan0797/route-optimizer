@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum PlanStatus {
+  DRAFT
+  OPTIMIZED
+}
+model Warehouse {
+  id String @id @default("main")
+  name String
+  latitude Float
+  longitude Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Store {
+  id String @id @default(cuid())
+  name String
+  address String?
+  latitude Float
+  longitude Float
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stops DeliveryStop[]
+  @@index([isActive, name, id])
+}
+model DeliveryPlan {
+  id String @id @default(cuid())
+  deliveryDate DateTime @db.Date
+  status PlanStatus @default(DRAFT)
+  warehouseNameSnapshot String
+  warehouseLatitudeSnapshot Float
+  warehouseLongitudeSnapshot Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  distanceMeters Float?
+  durationSeconds Float?
+  routingProvider String?
+  optimizedAt DateTime?
+  optimizationToken String?
+  optimizationStartedAt DateTime?
+  revision Int @default(0)
+  stops DeliveryStop[]
+  @@index([deliveryDate, id])
+}
+model DeliveryStop {
+  id String @id @default(cuid())
+  deliveryPlanId String
+  storeId String
+  storeNameSnapshot String
+  latitudeSnapshot Float
+  longitudeSnapshot Float
+  inputOrder Int
+  visitOrder Int?
+  isUrgent Boolean @default(false)
+  plan DeliveryPlan @relation(fields: [deliveryPlanId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id])
+  @@unique([deliveryPlanId, storeId])
+  @@unique([deliveryPlanId, inputOrder])
+}
+model Admin {
+  id String @id @default("admin")
+  username String @unique
+  passwordHash String
+  sessionVersion Int @default(1)
+}
+model RateLimit {
+  key String @id
+  windowStart DateTime
+  count Int
+}

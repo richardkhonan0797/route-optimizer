@@ -1,0 +1,84 @@
+# Install dependencies and generate build output inside the image
+**/node_modules
+**/.next
+out
+dist
+build
+next-env.d.ts
+**/*.tsbuildinfo
+**/.npm
+**/.pnpm-store
+**/.yarn/cache
+**/.yarn/unplugged
+**/.yarn/install-state.gz
+**/.pnp.*
+**/.vercel
+**/.turbo
+**/.cache
+**/.eslintcache
+**/.stylelintcache
+
+# Version control, editor settings, and local agent state
+**/.git
+**/.github
+**/.idea
+**/.vscode
+**/.codex
+**/.agents
+.gitignore
+AGENTS.md
+
+# Never copy local environment or credentials into build layers
+**/.env
+**/.env.*
+**/.envrc
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/.aws
+**/.ssh
+secrets
+
+# Logs, runtime files, and generated test reports
+**/*.log
+**/logs
+**/*.pid
+**/*.pid.lock
+**/report.*.json
+**/coverage
+**/.nyc_output
+**/playwright-report
+**/test-results
+
+# Local database files and backups
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-wal
+**/*.sqlite-shm
+**/*.sqlite3-wal
+**/*.sqlite3-shm
+backups
+pgdata
+
+# Temporary files and OS metadata
+**/.tmp
+**/tmp
+**/*.tmp
+**/*.temp
+**/*.bak
+**/*.swp
+**/*.swo
+**/*~
+**/*.suo
+**/*.user
+**/.DS_Store
+**/._*
+**/Thumbs.db
+**/Desktop.ini
+**/$RECYCLE.BIN
+
+# Keep package manifests/lockfiles, configs, src, public, prisma, and scripts.
+# Compose's setup service uses the build stage for migrations and admin creation.

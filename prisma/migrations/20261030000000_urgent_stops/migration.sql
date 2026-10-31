@@ -1,0 +1,1 @@
+ALTER TABLE "DeliveryStop" ADD COLUMN "isUrgent" BOOLEAN NOT NULL DEFAULT false;
