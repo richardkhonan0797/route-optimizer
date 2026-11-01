@@ -109,6 +109,10 @@ export function PlanResult({
             {optimizeLabel}
           </Button>
         </div>
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          Saat menyusun atau menghitung ulang: Rute dimulai dari toko terdekat
+          berdasarkan jarak berkendara. Toko urgent tetap didahulukan.
+        </p>
         {error && (
           <div className="mt-5">
             <Notice error>{error}</Notice>

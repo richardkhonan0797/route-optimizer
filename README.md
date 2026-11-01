@@ -1,5 +1,7 @@
 # Rute Antar
 
+Panduan deployment Vercel: [DEPLOYMENT.md](DEPLOYMENT.md).
+
 
 
 MVP aplikasi internal distribusi Indonesia: satu gudang, satu kendaraan, 1–25 toko unik, perjalanan berangkat dan kembali ke gudang. Next.js App Router + TypeScript, Tailwind CSS + komponen Button shadcn/ui (Radix), PostgreSQL + Prisma, Zod, iron-session dan bcryptjs. Tidak memakai AI, OR-Tools, geocoding, atau peta interaktif.
@@ -189,9 +191,9 @@ Struktur utama: `src/app` untuk halaman dan route handlers; `src/components` unt
 
 Saat menyusun rencana, tandai **Urgent** pada tujuan terpilih. Prioritas tersimpan per tujuan dalam snapshot rencana, bukan pada master toko. Semua tujuan urgent dikunjungi sebelum tujuan biasa. Menghapus tujuan menghapus penandanya; perubahan prioritas setelah hasil tersimpan membuat rencana baru melalui **Ubah pilihan / buat rencana baru**. Label juga tersedia saat membuka riwayat dan menyalin urutan.
 
-Rute campuran dihitung dalam dua permintaan ORS berurutan: gudang ke seluruh urgent dengan akhir terbuka, lalu dari urgent terakhir ke seluruh tujuan biasa dan kembali ke gudang. Jarak dan durasi kedua tahap dijumlahkan. Semua-urgent atau tanpa urgent tetap memakai satu permintaan pulang pergi. Pendekatan ini menjamin urgent lebih dulu, tetapi tidak menjamin total perjalanan terpendek. Belum ada tenggat jam tiba atau perubahan tujuan saat kendaraan berjalan.
+Rute dimulai dari toko terdekat berdasarkan jarak berkendara dari gudang; jika ada urgent, pilihan pertama dibatasi ke toko urgent. ORS Matrix (`POST https://api.heigit.org/openrouteservice/v2/matrix/driving-car`) menghitung jarak dan durasi. Jarak seri diputuskan berdasarkan durasi, lalu urutan input tersimpan. Sisa urgent dioptimasi lebih dulu, kemudian tujuan biasa dan kembali ke gudang. Total mencakup perjalanan ke toko pertama dan seluruh tahap berikutnya. Satu toko memakai matriks pergi dan pulang terpisah karena arah perjalanan dapat berbeda. Setiap perhitungan memakai dua sampai tiga permintaan. Pendekatan ini menjamin toko terdekat yang memenuhi prioritas dikunjungi pertama, tetapi tidak menjamin total perjalanan terpendek. Belum ada tenggat jam tiba atau perubahan tujuan saat kendaraan berjalan.
 
-Batas 5 permintaan/menit dan 100/24 jam dihitung per tahap ORS, termasuk percobaan gagal. Tiap tahap memiliki timeout 20 detik tanpa retry otomatis. Kegagalan tahap kedua tidak menyimpan hasil parsial dan tidak mengubah hasil lama. Urutan, estimasi, dan prioritas tetap tersedia setelah reload tanpa panggilan ORS tambahan.
+Batas 5 permintaan/menit dan 100/24 jam dihitung per tahap ORS, termasuk percobaan gagal. Tiap permintaan memiliki timeout 20 detik tanpa retry otomatis, dengan batas keseluruhan perhitungan 50 detik sebelum lease 60 detik kedaluwarsa. Permintaan matriks juga memakai limiter yang sama. Hasil matriks tidak lengkap atau tujuan tidak terjangkau ditolak tanpa fallback garis lurus. Kegagalan mana pun tidak menyimpan hasil parsial dan tidak mengubah hasil lama. Rute lama tetap tersimpan sampai pengguna memilih Hitung Ulang. Urutan, estimasi, dan prioritas tetap tersedia setelah reload tanpa panggilan ORS tambahan.
 
 API pembuatan rencana menerima `urgentStoreIds` opsional (default `[]`), berisi ID unik yang termasuk `storeIds`. Respons tujuan menambahkan `isUrgent`. Migration `20261030000000_urgent_stops` mengisi tujuan lama dengan `false`; jalankan `npm run db:generate` dan `npm run db:migrate` sebelum menggunakan versi ini.
 

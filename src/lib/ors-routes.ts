@@ -41,13 +41,8 @@ export async function computeRoute(
   stores: Coordinate[],
   fetcher: typeof fetch = fetch,
   end: Coordinate | null = warehouse,
+  deadline?: AbortSignal,
 ): Promise<RouteResult> {
-  const key = process.env.ORS_API_KEY;
-  if (!key)
-    throw new AppError(
-      "API key belum diatur. Isi ORS_API_KEY di server dan mulai ulang aplikasi.",
-      503,
-    );
   for (const point of [warehouse, ...stores, ...(end ? [end] : [])]) {
     if (!locationSchema.safeParse({ ...point, name: "lokasi" }).success)
       throw new AppError("Koordinat tidak valid.");
@@ -55,63 +50,26 @@ export async function computeRoute(
   if (stores.length < 1 || stores.length > 25)
     throw new AppError("Pilih 1 sampai 25 toko.");
   const coordinate = (point: Coordinate) => [point.longitude, point.latitude];
-  let response: Response;
-  try {
-    response = await fetcher("https://api.heigit.org/vroom/v0", {
-      method: "POST",
-      cache: "no-store",
-      signal: AbortSignal.timeout(20000),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: key,
-      },
-      body: JSON.stringify({
-        vehicles: [
-          {
-            id: 1,
-            profile: "driving-car",
-            start: coordinate(warehouse),
-            ...(end ? { end: coordinate(end) } : {}),
-          },
-        ],
-        jobs: stores.map((point, index) => ({
-          id: index + 1,
-          location: coordinate(point),
-        })),
-        options: { g: true },
-      }),
-    });
-  } catch {
-    throw new AppError(
-      "ORS tidak dapat dihubungi atau waktu tunggu habis. Silakan coba lagi.",
-      503,
-    );
-  }
-  if ([401, 403].includes(response.status))
-    throw new AppError(
-      "Akses ORS ditolak. Periksa API key, akses layanan di dashboard HeiGIT.",
-      503,
-    );
-  if (response.status === 429)
-    throw new AppError(
-      "Kuota ORS habis atau batas permintaan tercapai. Coba lagi nanti.",
-      429,
-    );
-  if ([400, 422].includes(response.status))
-    throw new AppError(
-      "ORS menolak permintaan. Periksa koordinat tujuan dan konfigurasi API.",
-    );
-  if (!response.ok)
-    throw new AppError(
-      "Layanan ORS sedang tidak tersedia. Silakan coba lagi.",
-      503,
-    );
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    throw new AppError("Respons optimasi tidak valid.", 502);
-  }
+  const body = await requestOrs(
+    "https://api.heigit.org/vroom/v0",
+    {
+      vehicles: [
+        {
+          id: 1,
+          profile: "driving-car",
+          start: coordinate(warehouse),
+          ...(end ? { end: coordinate(end) } : {}),
+        },
+      ],
+      jobs: stores.map((point, index) => ({
+        id: index + 1,
+        location: coordinate(point),
+      })),
+      options: { g: true },
+    },
+    fetcher,
+    deadline,
+  );
   if (
     typeof body === "object" &&
     body !== null &&
@@ -149,4 +107,123 @@ export async function computeRoute(
     distanceMeters: route.distance,
     durationSeconds: route.duration,
   };
+}
+
+async function requestOrs(
+  url: string,
+  payload: unknown,
+  fetcher: typeof fetch,
+  deadline?: AbortSignal,
+): Promise<unknown> {
+  const key = process.env.ORS_API_KEY;
+  if (!key)
+    throw new AppError(
+      "API key belum diatur. Isi ORS_API_KEY di server dan mulai ulang aplikasi.",
+      503,
+    );
+  const timeout = AbortSignal.timeout(20000);
+  const signal = deadline ? AbortSignal.any([deadline, timeout]) : timeout;
+  let response: Response;
+  try {
+    signal.throwIfAborted();
+    response = await fetcher(url, {
+      method: "POST",
+      cache: "no-store",
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: key,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new AppError(
+      "ORS tidak dapat dihubungi atau waktu tunggu habis. Silakan coba lagi.",
+      503,
+    );
+  }
+  if ([401, 403].includes(response.status))
+    throw new AppError(
+      "Akses ORS ditolak. Periksa API key, akses layanan di dashboard HeiGIT.",
+      503,
+    );
+  if (response.status === 429)
+    throw new AppError(
+      "Kuota ORS habis atau batas permintaan tercapai. Coba lagi nanti.",
+      429,
+    );
+  if ([400, 422].includes(response.status))
+    throw new AppError(
+      "ORS menolak permintaan. Periksa koordinat tujuan dan konfigurasi API.",
+    );
+  if (!response.ok)
+    throw new AppError(
+      "Layanan ORS sedang tidak tersedia. Silakan coba lagi.",
+      503,
+    );
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new AppError("Respons optimasi tidak valid.", 502);
+  }
+  if (signal.aborted)
+    throw new AppError(
+      "ORS tidak dapat dihubungi atau waktu tunggu habis. Silakan coba lagi.",
+      503,
+    );
+  return body;
+}
+
+// Retain destination order so equal distance and duration use existing input order.
+export async function computeDrivingLegs(
+  start: Coordinate,
+  destinations: Coordinate[],
+  fetcher: typeof fetch = fetch,
+  deadline?: AbortSignal,
+): Promise<Omit<RouteResult, "indices">[]> {
+  if (destinations.length < 1 || destinations.length > 25)
+    throw new AppError("Pilih 1 sampai 25 toko.");
+  for (const point of [start, ...destinations]) {
+    if (!locationSchema.safeParse({ ...point, name: "lokasi" }).success)
+      throw new AppError("Koordinat tidak valid.");
+  }
+  const body = await requestOrs(
+    "https://api.heigit.org/openrouteservice/v2/matrix/driving-car",
+    {
+      locations: [start, ...destinations].map((point) => [
+        point.longitude,
+        point.latitude,
+      ]),
+      sources: ["0"],
+      destinations: destinations.map((_, index) => String(index + 1)),
+      metrics: ["distance", "duration"],
+      units: "m",
+    },
+    fetcher,
+    deadline,
+  );
+  const cell = z.number().finite().nonnegative().nullable();
+  const row = z.array(cell).length(destinations.length);
+  const parsed = z
+    .object({
+      distances: z.array(row).length(1),
+      durations: z.array(row).length(1),
+    })
+    .safeParse(body);
+  if (!parsed.success)
+    throw new AppError(
+      "Respons jarak ORS tidak lengkap atau tidak valid. Silakan hitung ulang.",
+      502,
+    );
+  return destinations.map((_, index) => {
+    const distanceMeters = parsed.data.distances[0][index];
+    const durationSeconds = parsed.data.durations[0][index];
+    if (distanceMeters === null || durationSeconds === null)
+      throw new AppError(
+        "Tidak semua toko dapat dijangkau. Periksa koordinat dan akses jalan tujuan.",
+        422,
+      );
+    return { distanceMeters, durationSeconds };
+  });
 }

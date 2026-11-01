@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   findUniqueOrThrow: vi.fn(),
   transaction: vi.fn(),
   compute: vi.fn(),
+  legs: vi.fn(),
   limit: vi.fn(),
 }));
 vi.mock("../src/lib/db", () => ({
@@ -19,13 +20,20 @@ vi.mock("../src/lib/rate-limit", () => ({ consumeLimit: mocks.limit }));
 vi.mock("../src/lib/ors-routes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/ors-routes")>()),
   computeRoute: mocks.compute,
+  computeDrivingLegs: mocks.legs,
 }));
 import { optimizePlan } from "../src/lib/plans";
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.updateMany.mockResolvedValue({ count: 1 });
   mocks.limit.mockResolvedValue(undefined);
+  mocks.legs.mockImplementation(async (_start, points) =>
+    points.map(() => ({ distanceMeters: 10, durationSeconds: 2 })),
+  );
   mocks.findUniqueOrThrow.mockResolvedValue({
     id: "plan",
     revision: 1,
@@ -38,7 +46,7 @@ beforeEach(() => {
   });
 });
 it("ORS failure leaves previous valid result untouched", async () => {
-  mocks.compute.mockRejectedValue(new Error("ORS timeout"));
+  mocks.legs.mockRejectedValue(new Error("ORS timeout"));
   await expect(optimizePlan("plan")).rejects.toThrow("ORS timeout");
   expect(mocks.transaction).not.toHaveBeenCalled();
   const cleanup = mocks.updateMany.mock.calls[1][0];
@@ -75,8 +83,8 @@ it("persists ORS order and metrics together", async () => {
   expect(updateStop).toHaveBeenCalledTimes(1);
   const stored = updatePlan.mock.calls[0][0].data;
   expect(stored.status).toBe("OPTIMIZED");
-  expect(stored.distanceMeters).toBe(123);
-  expect(stored.durationSeconds).toBe(45);
+  expect(stored.distanceMeters).toBe(20);
+  expect(stored.durationSeconds).toBe(4);
   expect(stored.routingProvider).toBe("ORS");
   expect(stored).not.toHaveProperty("indices");
 });
@@ -137,22 +145,30 @@ it.each([
     const result = await optimizePlan("plan");
     expect(result.stops.map((stop) => stop.id)).toEqual(
       [
-        ...stops.slice(count - urgentCount).reverse(),
+        stops[count - urgentCount],
+        ...stops.slice(count - urgentCount + 1).reverse(),
         ...stops.slice(0, count - urgentCount).reverse(),
       ].map((stop) => stop.id),
     );
-    expect(result.distanceMeters).toBe(200);
-    expect(result.durationSeconds).toBe(40);
-    expect(mocks.compute.mock.calls[0][3]).toBeNull();
-    expect(mocks.compute.mock.calls[1][0]).toEqual({
+    const stages = urgentCount > 1 ? 2 : 1;
+    expect(result.distanceMeters).toBe(10 + 100 * stages);
+    expect(result.durationSeconds).toBe(2 + 20 * stages);
+    expect(mocks.legs.mock.calls[0][1]).toEqual(
+      stops.slice(count - urgentCount).map((stop) => ({
+        latitude: stop.latitudeSnapshot,
+        longitude: stop.longitudeSnapshot,
+      })),
+    );
+    expect(mocks.compute.mock.calls[0][0]).toEqual({
       latitude: count - urgentCount,
       longitude: count - urgentCount,
     });
-    expect(mocks.compute.mock.calls[1][3]).toEqual({
+    if (stages === 2) expect(mocks.compute.mock.calls[0][3]).toBeNull();
+    expect(mocks.compute.mock.calls.at(-1)?.[3]).toEqual({
       latitude: -1,
       longitude: -1,
     });
-    expect(mocks.limit).toHaveBeenCalledTimes(4);
+    expect(mocks.limit).toHaveBeenCalledTimes((1 + stages) * 2);
   },
 );
 
@@ -161,21 +177,25 @@ it.each([
   [25, 25],
   [25, 0],
 ])(
-  "uses one round trip for %i stores and %i urgent",
+  "fixes first leg and returns home for %i stores and %i urgent",
   async (count, urgentCount) => {
     mixedPlan(count, urgentCount);
     mocks.compute.mockResolvedValue({
-      indices: Array.from({ length: count }, (_, i) => i),
+      indices: Array.from({ length: count - 1 }, (_, i) => i),
       distanceMeters: 1,
       durationSeconds: 1,
     });
     await optimizePlan("plan");
-    expect(mocks.compute).toHaveBeenCalledTimes(1);
-    expect(mocks.compute.mock.calls[0][3]).toEqual({
+    expect(mocks.compute).toHaveBeenCalledTimes(count === 1 ? 0 : 1);
+    expect(
+      count === 1
+        ? mocks.legs.mock.calls[1][1][0]
+        : mocks.compute.mock.calls[0][3],
+    ).toEqual({
       latitude: -1,
       longitude: -1,
     });
-    expect(mocks.limit).toHaveBeenCalledTimes(2);
+    expect(mocks.limit).toHaveBeenCalledTimes(4);
   },
 );
 
@@ -184,12 +204,14 @@ it.each(["network", "quota", "invalid order"])(
   async (failure) => {
     mixedPlan();
     mocks.compute.mockResolvedValueOnce({
-      indices: [1, 0],
+      indices: [0],
       distanceMeters: 100,
       durationSeconds: 20,
     });
     if (failure === "quota")
       mocks.limit
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(undefined)
         .mockRejectedValueOnce(new Error("quota"));
@@ -209,3 +231,81 @@ it.each(["network", "quota", "invalid order"])(
     expect(mocks.compute).toHaveBeenCalledTimes(failure === "quota" ? 1 : 2);
   },
 );
+
+it.each([
+  [[100, 50, 10], [1, 2, 9], 2],
+  [[100, 10, 50], [1, 9, 2], 1],
+  [[10, 10, 50], [9, 1, 2], 1],
+  [[10, 10, 50], [1, 1, 2], 0],
+])(
+  "chooses by road distance, duration, then input order",
+  async (distances, durations, expected) => {
+    mixedPlan(3, 0);
+    mocks.legs.mockResolvedValueOnce(
+      distances.map((distanceMeters, i) => ({
+        distanceMeters,
+        durationSeconds: durations[i],
+      })),
+    );
+    mocks.compute.mockResolvedValue({
+      indices: [1, 0],
+      distanceMeters: 100,
+      durationSeconds: 20,
+    });
+    const result = await optimizePlan("plan");
+    expect(result.indices[0]).toBe(expected);
+    expect(new Set(result.indices).size).toBe(3);
+    expect(result.distanceMeters).toBe(distances[expected] + 100);
+    expect(mocks.compute.mock.calls[0][1]).not.toContainEqual({
+      latitude: expected,
+      longitude: expected,
+    });
+  },
+);
+
+it("counts asymmetric outbound and return legs for one stop", async () => {
+  mixedPlan(1, 0);
+  mocks.legs
+    .mockResolvedValueOnce([{ distanceMeters: 100, durationSeconds: 20 }])
+    .mockResolvedValueOnce([{ distanceMeters: 150, durationSeconds: 40 }]);
+  expect(await optimizePlan("plan")).toMatchObject({
+    indices: [0],
+    distanceMeters: 250,
+    durationSeconds: 60,
+  });
+  expect(mocks.compute).not.toHaveBeenCalled();
+});
+
+it("rejects a final routing result that arrives after the deadline", async () => {
+  mixedPlan(2, 0);
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now);
+  mocks.compute.mockImplementationOnce(async () => {
+    vi.mocked(Date.now).mockReturnValue(now + 50001);
+    return { indices: [0], distanceMeters: 100, durationSeconds: 20 };
+  });
+  await expect(optimizePlan("plan")).rejects.toThrow("Waktu tunggu");
+  expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(
+    mocks.updateMany.mock.calls.at(-1)?.[0].data.optimizationToken,
+  ).toBeNull();
+});
+
+it("does not persist or start another request after the overall deadline", async () => {
+  mixedPlan();
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now);
+  mocks.legs.mockImplementationOnce(async () => {
+    vi.mocked(Date.now).mockReturnValue(now + 50001);
+    return [
+      { distanceMeters: 10, durationSeconds: 2 },
+      { distanceMeters: 20, durationSeconds: 3 },
+    ];
+  });
+  await expect(optimizePlan("plan")).rejects.toThrow("Waktu tunggu");
+  expect(mocks.compute).not.toHaveBeenCalled();
+  expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(
+    mocks.updateMany.mock.calls.at(-1)?.[0].data.optimizationToken,
+  ).toBeNull();
+});

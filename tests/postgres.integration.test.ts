@@ -14,19 +14,27 @@ it.skipIf(!enabled)(
     let planId: string | undefined;
     vi.stubEnv("ORS_API_KEY", "mock-only-not-a-real-key");
 
-    const mockFetch = vi.fn<typeof fetch>().mockImplementation(async () =>
-      Response.json({
-        code: 0,
-        unassigned: [],
-        routes: [
-          {
-            vehicle: 1,
-            distance: 3210,
-            duration: 600,
-            steps: [{ type: "start" }, { type: "job", id: 1 }, { type: "end" }],
-          },
-        ],
-      }),
+    const mockFetch = vi.fn<typeof fetch>().mockImplementation(async (url) =>
+      Response.json(
+        String(url).includes("/matrix/")
+          ? { distances: [[3210]], durations: [[600]] }
+          : {
+              code: 0,
+              unassigned: [],
+              routes: [
+                {
+                  vehicle: 1,
+                  distance: 3210,
+                  duration: 600,
+                  steps: [
+                    { type: "start" },
+                    { type: "job", id: 1 },
+                    { type: "end" },
+                  ],
+                },
+              ],
+            },
+      ),
     );
     vi.stubGlobal("fetch", mockFetch);
     try {
@@ -77,7 +85,7 @@ it.skipIf(!enabled)(
       ]);
       expect(result.persisted).toBe(true);
       const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
-      expect(body.vehicles[0].start).toEqual([0, 0]);
+      expect(body.locations[0]).toEqual([0, 0]);
       expect(
         await db.deliveryPlan.findUniqueOrThrow({ where: { id: plan.id } }),
       ).toMatchObject({

@@ -252,8 +252,9 @@ export default function NewPlan() {
             {selected.filter((store) => store.isUrgent).length} tujuan urgent
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Semua tujuan urgent dikunjungi lebih dulu. Prioritas dapat
-            memperpanjang perjalanan; total rute belum tentu paling pendek.
+            Rute dimulai dari toko terdekat berdasarkan jarak berkendara. Toko
+            urgent tetap didahulukan. Prioritas dapat memperpanjang perjalanan;
+            total rute belum tentu paling pendek.
           </p>
           <div className="my-5 max-h-80 overflow-y-auto">
             {selected.length === 0 ? (
@@ -313,8 +314,8 @@ export default function NewPlan() {
           </Button>
           <p className="mt-4 text-xs leading-5 text-slate-400">
             Satu kendaraan, maksimal 25 toko. Perhitungan hanya berjalan saat
-            tombol ditekan dan menggunakan kuota ORS. Rute campuran urgent dan
-            biasa memakai dua permintaan; lainnya satu permintaan.
+            tombol ditekan dan menggunakan kuota ORS. Setiap perhitungan memakai
+            dua sampai tiga permintaan layanan rute.
           </p>
         </aside>
       </div>
