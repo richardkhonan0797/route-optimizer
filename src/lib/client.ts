@@ -39,6 +39,7 @@ export type Stop = {
   visitOrder: number | null;
 };
 export type Plan = {
+  revision: number;
   id: string;
   deliveryDate: string;
   status: "DRAFT" | "OPTIMIZED";
@@ -52,6 +53,7 @@ export type Plan = {
   stops: Stop[];
 };
 export type Optimization = {
+  revision: number;
   stops: Stop[];
   distanceMeters: number;
   durationSeconds: number;

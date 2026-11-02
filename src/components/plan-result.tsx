@@ -6,6 +6,7 @@ import { formatDate, navigationUrl } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Notice } from "./common";
 import { GoogleAttribution } from "./google-attribution";
+import { StopOrderEditor, type StopOrder } from "./stop-order-editor";
 export function PlanResult({
   plan,
   initialResult,
@@ -14,6 +15,7 @@ export function PlanResult({
   initialResult?: Optimization;
 }) {
   const [result, setResult] = useState(initialResult);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState("");
@@ -61,7 +63,7 @@ export function PlanResult({
     [...plan.stops].sort(
       (a, b) => (a.visitOrder ?? a.inputOrder) - (b.visitOrder ?? b.inputOrder),
     );
-  async function optimize() {
+  async function optimize(order?: StopOrder) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
@@ -71,8 +73,13 @@ export function PlanResult({
         await requestJson<Optimization>(
           `/api/plans/${plan.id}/optimize`,
           "POST",
+          order && {
+            ...order,
+            expectedRevision: result?.revision ?? plan.revision,
+          },
         ),
       );
+      setEditing(false);
     } catch (error) {
       setError(
         `${(error as Error).message}${hasOrder ? " Hasil lama masih ditampilkan dan tidak diubah." : " Belum ada hasil optimasi."}`,
@@ -99,18 +106,33 @@ export function PlanResult({
             {stops.some((stop) => stop.isUrgent) && (
               <p className="mt-2 text-sm text-amber-800">
                 {stops.filter((stop) => stop.isUrgent).length} tujuan urgent ·
-                Urgent dikunjungi lebih dulu. Prioritas dapat memperpanjang
-                perjalanan; total rute belum tentu paling pendek.
+                Urutan manual dapat mengubah prioritas. Prioritas dapat
+                memperpanjang perjalanan; total rute belum tentu paling pendek.
               </p>
             )}
           </div>
-          <Button variant="outline" disabled={busy} onClick={optimize}>
+          {hasOrder && !editing && (
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setError("");
+                setEditing(true);
+              }}
+            >
+              Atur urutan
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            disabled={busy || editing}
+            onClick={() => optimize()}
+          >
             <RotateCw size={16} className={busy ? "animate-spin" : ""} />
             {optimizeLabel}
           </Button>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-500">
-          Saat menyusun atau menghitung ulang: Rute dimulai dari toko terdekat
+          Saat menghitung ulang seluruh rute: Rute dimulai dari toko terdekat
           berdasarkan jarak berkendara. Toko urgent tetap didahulukan.
         </p>
         {error && (
@@ -154,6 +176,17 @@ export function PlanResult({
         )}
         {hasOrder && attribution}
       </div>
+      {editing && (
+        <StopOrderEditor
+          stops={stops}
+          busy={busy}
+          onSave={optimize}
+          onCancel={() => {
+            setEditing(false);
+            setError("");
+          }}
+        />
+      )}
       {calculatedAt && hasOrder && (
         <p className="text-xs text-slate-500">
           Dihitung:{" "}
@@ -170,7 +203,7 @@ export function PlanResult({
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold">
             {hasOrder
-              ? "Daftar kunjungan"
+              ? "Daftar kunjungan tersimpan"
               : "Tujuan yang dipilih — belum dioptimasi"}
           </h3>
           <Button

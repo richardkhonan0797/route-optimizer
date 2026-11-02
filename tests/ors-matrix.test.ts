@@ -1,9 +1,42 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { computeDrivingLegs } from "../src/lib/ors-routes";
+import { measureFixedRoute } from "../src/lib/ors-routes";
 
 const start = { latitude: 1, longitude: 2 };
 const destinations = [{ latitude: 3, longitude: 4 }];
 beforeEach(() => vi.stubEnv("ORS_API_KEY", "secret-key"));
+it("sums consecutive directed legs and the asymmetric return, ignoring unused unreachable cells", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        distances: [
+          [0, 10, null],
+          [500, 0, 20],
+          [30, null, 0],
+        ],
+        durations: [
+          [0, 1, null],
+          [50, 0, 2],
+          [3, null, 0],
+        ],
+      }),
+    ),
+  );
+  try {
+    const stops = [...destinations, { latitude: 5, longitude: 6 }];
+    await expect(measureFixedRoute(start, stops, false)).resolves.toEqual({
+      distanceMeters: 30,
+      durationSeconds: 3,
+    });
+    await expect(measureFixedRoute(start, stops, true)).resolves.toEqual({
+      distanceMeters: 60,
+      durationSeconds: 6,
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 afterEach(() => vi.unstubAllEnvs());
 
 it.each([1, 25])(

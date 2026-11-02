@@ -4,11 +4,13 @@ import { AppError } from "./errors";
 import {
   computeRoute,
   computeDrivingLegs,
+  measureFixedRoute,
+  type RouteResult,
   mapOptimizedStops,
   type Coordinate,
 } from "./ors-routes";
 import { consumeLimit } from "./rate-limit";
-import { planSchema } from "./validation";
+import { manualOrderSchema, planSchema } from "./validation";
 export async function createPlan(input: unknown) {
   const data = planSchema.parse(input);
   return db.$transaction(async (tx) => {
@@ -43,7 +45,9 @@ export async function createPlan(input: unknown) {
     });
   });
 }
-export async function optimizePlan(id: string) {
+export async function optimizePlan(id: string, input?: unknown) {
+  const manual =
+    input === undefined ? undefined : manualOrderSchema.parse(input);
   const token = randomUUID();
   const deadlineAt = Date.now() + 50000;
   const deadline = AbortSignal.timeout(50000);
@@ -64,6 +68,10 @@ export async function optimizePlan(id: string) {
   const acquired = await db.deliveryPlan.updateMany({
     where: {
       id,
+      ...(manual && {
+        revision: manual.expectedRevision,
+        status: "OPTIMIZED" as const,
+      }),
       OR: [
         { optimizationToken: null },
         { optimizationStartedAt: { lt: new Date(Date.now() - 60000) } },
@@ -73,7 +81,9 @@ export async function optimizePlan(id: string) {
   });
   if (!acquired.count)
     throw new AppError(
-      "Rencana tidak ditemukan atau sedang dihitung. Tunggu lalu muat ulang.",
+      manual
+        ? "Rencana berubah, belum dioptimasi, atau sedang dihitung. Buka kembali rencana terbaru."
+        : "Rencana tidak ditemukan atau sedang dihitung. Tunggu lalu muat ulang.",
       409,
     );
   try {
@@ -110,28 +120,48 @@ export async function optimizePlan(id: string) {
       );
       return { ...result, indices: mapOptimizedStops(indices, result.indices) };
     }
-    const eligible = urgent.length ? urgent : normal;
-    await reserveRequest();
-    const legs = await computeDrivingLegs(
-      warehouse,
-      eligible.map((index) => points[index]),
-      fetch,
-      deadline,
-    );
-    let nearest = 0;
-    for (let index = 1; index < legs.length; index++) {
-      if (
-        legs[index].distanceMeters < legs[nearest].distanceMeters ||
-        (legs[index].distanceMeters === legs[nearest].distanceMeters &&
-          legs[index].durationSeconds < legs[nearest].durationSeconds)
-      )
-        nearest = index;
+    let route: RouteResult;
+    if (manual) {
+      const indices = manual.orderedStopIds.map((id) =>
+        plan.stops.findIndex((stop) => stop.id === id),
+      );
+      if (indices.length !== points.length || indices.includes(-1))
+        throw new AppError("Daftar tujuan tidak sesuai dengan rencana.");
+      const boundary = manual.orderedStopIds.indexOf(manual.fixedThroughStopId);
+      const fixed = indices.slice(0, boundary + 1);
+      await reserveRequest();
+      const metrics = await measureFixedRoute(
+        warehouse,
+        fixed.map((i) => points[i]),
+        fixed.length === points.length,
+        deadline,
+      );
+      route = { indices: fixed, ...metrics };
+    } else {
+      const eligible = urgent.length ? urgent : normal;
+      await reserveRequest();
+      const legs = await computeDrivingLegs(
+        warehouse,
+        eligible.map((index) => points[index]),
+        fetch,
+        deadline,
+      );
+      let nearest = 0;
+      for (let index = 1; index < legs.length; index++) {
+        if (
+          legs[index].distanceMeters < legs[nearest].distanceMeters ||
+          (legs[index].distanceMeters === legs[nearest].distanceMeters &&
+            legs[index].durationSeconds < legs[nearest].durationSeconds)
+        )
+          nearest = index;
+      }
+      const firstIndex = eligible[nearest];
+      route = { indices: [firstIndex], ...legs[nearest] };
     }
-    const firstIndex = eligible[nearest];
-    const route = { indices: [firstIndex], ...legs[nearest] };
-    let start = points[firstIndex];
+    const prefix = new Set(route.indices);
+    let start = points[route.indices[route.indices.length - 1]];
     const groups = [urgent, normal]
-      .map((group) => group.filter((index) => index !== firstIndex))
+      .map((group) => group.filter((index) => !prefix.has(index)))
       .filter((group) => group.length);
     for (let index = 0; index < groups.length; index++) {
       const result = await stage(
@@ -144,7 +174,7 @@ export async function optimizePlan(id: string) {
       route.durationSeconds += result.durationSeconds;
       start = points[result.indices[result.indices.length - 1]];
     }
-    if (!groups.length) {
+    if (!groups.length && !manual) {
       await reserveRequest();
       const [back] = await computeDrivingLegs(
         start,
@@ -157,7 +187,11 @@ export async function optimizePlan(id: string) {
     }
     checkDeadline();
     const ordered = mapOptimizedStops(plan.stops, route.indices);
-    if (ordered.some((stop, index) => index < urgent.length && !stop.isUrgent))
+    const priorityStops = manual ? ordered.slice(prefix.size) : ordered;
+    const urgentCount = priorityStops.filter((stop) => stop.isUrgent).length;
+    if (
+      priorityStops.some((stop, index) => index < urgentCount && !stop.isUrgent)
+    )
       throw new AppError("Urutan urgent tidak valid.", 502);
     const optimizedAt = new Date();
     await db.$transaction(
@@ -193,6 +227,7 @@ export async function optimizePlan(id: string) {
     );
     return {
       ...route,
+      revision: plan.revision + 1,
       stops: ordered.map((stop, index) => ({ ...stop, visitOrder: index + 1 })),
       persisted: true,
       routingProvider: "ORS" as const,

@@ -175,6 +175,51 @@ async function requestOrs(
   return body;
 }
 
+// A single matrix covers consecutive directed legs, including the return if requested.
+export async function measureFixedRoute(
+  warehouse: Coordinate,
+  stops: Coordinate[],
+  returnHome: boolean,
+  deadline?: AbortSignal,
+) {
+  const points = [warehouse, ...stops];
+  const path = points.map((_, i) => i);
+  if (returnHome) path.push(0);
+  const body = await requestOrs(
+    "https://api.heigit.org/openrouteservice/v2/matrix/driving-car",
+    {
+      locations: points.map((p) => [p.longitude, p.latitude]),
+      metrics: ["distance", "duration"],
+      units: "m",
+    },
+    fetch,
+    deadline,
+  );
+  const matrix = z
+    .array(
+      z
+        .array(z.number().finite().nonnegative().nullable())
+        .length(points.length),
+    )
+    .length(points.length);
+  const result = z
+    .object({ distances: matrix, durations: matrix })
+    .safeParse(body);
+  if (!result.success)
+    throw new AppError("Respons matriks ORS tidak valid.", 502);
+  let distanceMeters = 0;
+  let durationSeconds = 0;
+  for (let i = 1; i < path.length; i++) {
+    const distance = result.data.distances[path[i - 1]][path[i]];
+    const duration = result.data.durations[path[i - 1]][path[i]];
+    if (distance === null || duration === null)
+      throw new AppError("Ruas dalam urutan tetap tidak dapat dijangkau.", 422);
+    distanceMeters += distance;
+    durationSeconds += duration;
+  }
+  return { distanceMeters, durationSeconds };
+}
+
 // Retain destination order so equal distance and duration use existing input order.
 export async function computeDrivingLegs(
   start: Coordinate,

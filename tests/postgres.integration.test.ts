@@ -128,6 +128,44 @@ it.skipIf(!enabled)(
       await expect(
         createPlan({ deliveryDate: "2026-10-15", storeIds }),
       ).rejects.toThrow("tidak tersedia");
+      // Start a fresh test quota window after the full-route scenarios above.
+      await db.rateLimit.deleteMany({
+        where: { key: { in: ["optimize:global", "optimize:daily"] } },
+      });
+      const fixed = result.stops[1];
+      const flexible = result.stops[0];
+      mockFetch
+        .mockResolvedValueOnce(
+          Response.json({
+            distances: [
+              [0, 150],
+              [180, 0],
+            ],
+            durations: [
+              [0, 30],
+              [40, 0],
+            ],
+          }),
+        )
+        .mockImplementation(failure);
+      const edited = await optimizePlan(plan.id, {
+        orderedStopIds: [fixed.id, flexible.id],
+        fixedThroughStopId: fixed.id,
+        expectedRevision: result.revision,
+      });
+      const reopened = await db.deliveryPlan.findUniqueOrThrow({
+        where: { id: plan.id },
+        include: { stops: { orderBy: { visitOrder: "asc" } } },
+      });
+      expect(reopened).toMatchObject({
+        revision: edited.revision,
+        distanceMeters: 3360,
+        durationSeconds: 630,
+        stops: [
+          { id: fixed.id, visitOrder: 1 },
+          { id: flexible.id, visitOrder: 2 },
+        ],
+      });
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();

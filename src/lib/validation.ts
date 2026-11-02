@@ -48,6 +48,18 @@ export const planSchema = z
       path: ["urgentStoreIds"],
     },
   );
+export const manualOrderSchema = z
+  .object({
+    orderedStopIds: z.array(z.string().min(1).max(100)).min(1).max(25),
+    fixedThroughStopId: z.string().min(1).max(100),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .refine(
+    ({ orderedStopIds, fixedThroughStopId }) =>
+      new Set(orderedStopIds).size === orderedStopIds.length &&
+      orderedStopIds.includes(fixedThroughStopId),
+    "Urutan atau batas tujuan tidak valid.",
+  );
 export const loginSchema = z.object({
   username: z.string().trim().min(1).max(100),
   password: z.string().min(1).max(72),

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   compute: vi.fn(),
   legs: vi.fn(),
+  fixed: vi.fn(),
   limit: vi.fn(),
 }));
 vi.mock("../src/lib/db", () => ({
@@ -21,6 +22,7 @@ vi.mock("../src/lib/ors-routes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/ors-routes")>()),
   computeRoute: mocks.compute,
   computeDrivingLegs: mocks.legs,
+  measureFixedRoute: mocks.fixed,
 }));
 import { optimizePlan } from "../src/lib/plans";
 afterEach(() => {
@@ -128,6 +130,91 @@ function mixedPlan(count = 4, urgentCount = 2) {
   );
   return stops;
 }
+
+it("keeps the edited prefix, then optimizes remaining urgent and normal stops from its boundary", async () => {
+  const stops = mixedPlan(8, 2);
+  const ids = [1, 0, 6, 2, 3, 4, 5, 7].map((i) => stops[i].id);
+  mocks.fixed.mockResolvedValue({ distanceMeters: 90, durationSeconds: 15 });
+  mocks.compute.mockImplementation(async (_start, points) => ({
+    indices: points.map((_: unknown, i: number) => i).reverse(),
+    distanceMeters: 50,
+    durationSeconds: 10,
+  }));
+  const result = await optimizePlan("plan", {
+    orderedStopIds: ids,
+    fixedThroughStopId: ids[2],
+    expectedRevision: 1,
+  });
+  expect(mocks.updateMany.mock.calls[0][0].where).toMatchObject({
+    status: "OPTIMIZED",
+    revision: 1,
+  });
+  expect(mocks.compute.mock.calls[0][0]).toEqual({ latitude: 6, longitude: 6 });
+  expect(mocks.compute.mock.calls[0][3]).toBeNull();
+  expect(mocks.compute.mock.calls[1][3]).toEqual({
+    latitude: -1,
+    longitude: -1,
+  });
+  expect(result.indices).toEqual([1, 0, 6, 7, 5, 4, 3, 2]);
+  expect(result).toMatchObject({
+    distanceMeters: 190,
+    durationSeconds: 35,
+    revision: 2,
+  });
+  expect(mocks.legs).not.toHaveBeenCalled();
+});
+
+it.each([1, 3])(
+  "measures all %i fixed stops including the return in one call",
+  async (count) => {
+    const ids = mixedPlan(count, 0)
+      .map((stop) => stop.id)
+      .reverse();
+    mocks.fixed.mockResolvedValue({ distanceMeters: 45, durationSeconds: 12 });
+    const result = await optimizePlan("plan", {
+      orderedStopIds: ids,
+      fixedThroughStopId: ids.at(-1),
+      expectedRevision: 1,
+    });
+    expect(result.stops.map((stop) => stop.id)).toEqual(ids);
+    expect(mocks.fixed.mock.calls[0][2]).toBe(true);
+    expect(mocks.compute).not.toHaveBeenCalled();
+    expect(mocks.limit).toHaveBeenCalledTimes(2);
+  },
+);
+
+it.each([["stop-0"], ["stop-0", "stop-0"], ["stop-0", "foreign"]])(
+  "rejects invalid manual membership before quota",
+  async (...ids) => {
+    mixedPlan(2, 0);
+    await expect(
+      optimizePlan("plan", {
+        orderedStopIds: ids,
+        fixedThroughStopId: "stop-0",
+        expectedRevision: 1,
+      }),
+    ).rejects.toThrow();
+    expect(mocks.limit).not.toHaveBeenCalled();
+  },
+);
+
+it("rejects a revision conflict before quota and keeps the saved result after a suffix failure", async () => {
+  const ids = mixedPlan(2, 1).map((stop) => stop.id);
+  const order = {
+    orderedStopIds: ids,
+    fixedThroughStopId: ids[0],
+    expectedRevision: 1,
+  };
+  mocks.updateMany.mockResolvedValueOnce({ count: 0 });
+  await expect(optimizePlan("plan", order)).rejects.toMatchObject({
+    status: 409,
+  });
+  expect(mocks.limit).not.toHaveBeenCalled();
+  mocks.fixed.mockResolvedValue({ distanceMeters: 4, durationSeconds: 2 });
+  mocks.compute.mockRejectedValue(new Error("ORS timeout"));
+  await expect(optimizePlan("plan", order)).rejects.toThrow("ORS timeout");
+  expect(mocks.transaction).not.toHaveBeenCalled();
+});
 
 it.each([
   [4, 2],

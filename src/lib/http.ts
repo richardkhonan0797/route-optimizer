@@ -7,7 +7,7 @@ export function json(data: unknown, status = 200) {
     headers: { "Cache-Control": "no-store, private" },
   });
 }
-export async function readJson(request: Request) {
+export async function readJson(request: Request, allowEmpty = false) {
   if (!request.body) throw new AppError("Data wajib diisi.");
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -27,6 +27,7 @@ export async function readJson(request: Request) {
     reader.releaseLock();
   }
   const text = Buffer.concat(chunks).toString("utf8");
+  if (allowEmpty && size === 0) return undefined;
   try {
     return JSON.parse(text) as unknown;
   } catch {
