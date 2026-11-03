@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { AppError } from "./errors";
 import {
@@ -215,15 +216,20 @@ export async function optimizePlan(id: string, input?: unknown) {
             "Rencana berubah selama perhitungan. Silakan hitung ulang.",
             409,
           );
-        for (let index = 0; index < ordered.length; index++) {
-          await tx.deliveryStop.update({
-            where: { id: ordered[index].id },
-            data: { visitOrder: index + 1 },
-          });
-        }
+        const positions = ordered.map(
+          (stop, index) => Prisma.sql`(${stop.id}::text, ${index + 1}::int)`,
+        );
+        const updated = await tx.$executeRaw`
+          UPDATE "DeliveryStop" AS stop
+          SET "visitOrder" = positions.visit_order
+          FROM (VALUES ${Prisma.join(positions)}) AS positions(id, visit_order)
+          WHERE stop.id = positions.id AND stop."deliveryPlanId" = ${id}
+        `;
+        if (updated !== ordered.length)
+          throw new AppError("Daftar tujuan berubah. Muat ulang rencana.", 409);
         checkDeadline();
       },
-      { timeout: 5000 },
+      { timeout: 15000 },
     );
     return {
       ...route,

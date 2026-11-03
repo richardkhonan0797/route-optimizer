@@ -73,11 +73,11 @@ it("persists ORS order and metrics together", async () => {
     durationSeconds: 45,
   });
   const updatePlan = vi.fn().mockResolvedValue({ count: 1 });
-  const updateStop = vi.fn();
+  const updateStop = vi.fn().mockResolvedValue(1);
   mocks.transaction.mockImplementation(async (callback) =>
     callback({
       deliveryPlan: { updateMany: updatePlan },
-      deliveryStop: { update: updateStop },
+      $executeRaw: updateStop,
     }),
   );
   const result = await optimizePlan("plan");
@@ -101,7 +101,7 @@ it("stale lease result cannot overwrite a newer plan revision", async () => {
   mocks.transaction.mockImplementation(async (callback) =>
     callback({
       deliveryPlan: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-      deliveryStop: { update: updateStop },
+      $executeRaw: updateStop,
     }),
   );
   await expect(optimizePlan("plan")).rejects.toThrow("Rencana berubah");
@@ -125,7 +125,7 @@ function mixedPlan(count = 4, urgentCount = 2) {
   mocks.transaction.mockImplementation(async (callback) =>
     callback({
       deliveryPlan: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      deliveryStop: { update: vi.fn() },
+      $executeRaw: vi.fn().mockResolvedValue(count),
     }),
   );
   return stops;
