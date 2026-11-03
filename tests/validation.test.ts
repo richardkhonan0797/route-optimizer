@@ -27,13 +27,13 @@ describe("input validation", () => {
         .success,
     ).toBe(false),
   );
-  it("requires 1–25 unique destinations", () => {
+  it("requires 1–30 unique destinations", () => {
     const parse = (storeIds: string[]) =>
       planSchema.safeParse({ deliveryDate: "2026-10-15", storeIds }).success;
     expect(parse([])).toBe(false);
     expect(parse(["a", "a"])).toBe(false);
-    expect(parse(Array.from({ length: 25 }, (_, i) => String(i)))).toBe(true);
-    expect(parse(Array.from({ length: 26 }, (_, i) => String(i)))).toBe(false);
+    expect(parse(Array.from({ length: 30 }, (_, i) => String(i)))).toBe(true);
+    expect(parse(Array.from({ length: 31 }, (_, i) => String(i)))).toBe(false);
   });
   it("rejects impossible date", () =>
     expect(

@@ -39,7 +39,7 @@ it("sums consecutive directed legs and the asymmetric return, ignoring unused un
 });
 afterEach(() => vi.unstubAllEnvs());
 
-it.each([1, 25])(
+it.each([1, 30])(
   "requests driving distances and durations for %i destinations",
   async (count) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
@@ -110,7 +110,7 @@ it("validates coordinates, count, and key before sending a request", async () =>
   const fetcher = vi.fn<typeof fetch>();
   for (const points of [
     [],
-    Array(26).fill(start),
+    Array(31).fill(start),
     [{ latitude: 91, longitude: 0 }],
   ])
     await expect(computeDrivingLegs(start, points, fetcher)).rejects.toThrow();

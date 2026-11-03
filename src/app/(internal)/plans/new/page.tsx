@@ -212,7 +212,7 @@ export default function NewPlan() {
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={busy || (!checked && selected.length >= 25)}
+                      disabled={busy || (!checked && selected.length >= 30)}
                       onChange={() => toggle(store)}
                     />
                     <span>
@@ -245,7 +245,7 @@ export default function NewPlan() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Tujuan terpilih</h2>
             <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">
-              {selected.length} dari 25 toko
+              {selected.length} dari 30 toko
             </span>
           </div>
           <p className="mt-3 text-xs text-amber-800" role="status">
@@ -313,7 +313,7 @@ export default function NewPlan() {
             <ArrowRight size={16} />
           </Button>
           <p className="mt-4 text-xs leading-5 text-slate-400">
-            Satu kendaraan, maksimal 25 toko. Perhitungan hanya berjalan saat
+            Satu kendaraan, maksimal 30 toko. Perhitungan hanya berjalan saat
             tombol ditekan dan menggunakan kuota ORS. Setiap perhitungan memakai
             dua sampai tiga permintaan layanan rute.
           </p>

@@ -71,7 +71,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="min-w-0">
         <div className="hidden border-b border-slate-200 bg-white px-10 py-4 text-xs text-slate-500 md:block">
           Satu gudang <span className="px-3 text-slate-300">/</span> Satu
-          kendaraan <span className="px-3 text-slate-300">/</span> Hingga 25
+          kendaraan <span className="px-3 text-slate-300">/</span> Hingga 30
           tujuan
         </div>
         <main className="mx-auto max-w-6xl p-5 md:p-10">{children}</main>

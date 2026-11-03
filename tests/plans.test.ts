@@ -219,7 +219,7 @@ it("rejects a revision conflict before quota and keeps the saved result after a 
 it.each([
   [4, 2],
   [2, 1],
-  [25, 12],
+  [30, 12],
 ])(
   "orders urgent first for %i stores with %i urgent",
   async (count, urgentCount) => {
@@ -261,8 +261,8 @@ it.each([
 
 it.each([
   [1, 1],
-  [25, 25],
-  [25, 0],
+  [30, 30],
+  [30, 0],
 ])(
   "fixes first leg and returns home for %i stores and %i urgent",
   async (count, urgentCount) => {

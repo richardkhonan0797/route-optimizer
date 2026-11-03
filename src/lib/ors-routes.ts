@@ -47,8 +47,8 @@ export async function computeRoute(
     if (!locationSchema.safeParse({ ...point, name: "lokasi" }).success)
       throw new AppError("Koordinat tidak valid.");
   }
-  if (stores.length < 1 || stores.length > 25)
-    throw new AppError("Pilih 1 sampai 25 toko.");
+  if (stores.length < 1 || stores.length > 30)
+    throw new AppError("Pilih 1 sampai 30 toko.");
   const coordinate = (point: Coordinate) => [point.longitude, point.latitude];
   const body = await requestOrs(
     "https://api.heigit.org/vroom/v0",
@@ -227,8 +227,8 @@ export async function computeDrivingLegs(
   fetcher: typeof fetch = fetch,
   deadline?: AbortSignal,
 ): Promise<Omit<RouteResult, "indices">[]> {
-  if (destinations.length < 1 || destinations.length > 25)
-    throw new AppError("Pilih 1 sampai 25 toko.");
+  if (destinations.length < 1 || destinations.length > 30)
+    throw new AppError("Pilih 1 sampai 30 toko.");
   for (const point of [start, ...destinations]) {
     if (!locationSchema.safeParse({ ...point, name: "lokasi" }).success)
       throw new AppError("Koordinat tidak valid.");

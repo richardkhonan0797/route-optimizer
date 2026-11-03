@@ -25,7 +25,7 @@ export const planSchema = z
   .object({
     urgentStoreIds: z
       .array(z.string().min(1).max(100))
-      .max(25)
+      .max(30)
       .refine(
         (ids) => new Set(ids).size === ids.length,
         "Toko urgent tidak boleh duplikat.",
@@ -35,7 +35,7 @@ export const planSchema = z
     storeIds: z
       .array(z.string().min(1).max(100))
       .min(1, "Pilih minimal satu toko.")
-      .max(25, "Maksimal 25 toko.")
+      .max(30, "Maksimal 30 toko.")
       .refine(
         (ids) => new Set(ids).size === ids.length,
         "Toko tidak boleh duplikat.",
@@ -50,7 +50,7 @@ export const planSchema = z
   );
 export const manualOrderSchema = z
   .object({
-    orderedStopIds: z.array(z.string().min(1).max(100)).min(1).max(25),
+    orderedStopIds: z.array(z.string().min(1).max(100)).min(1).max(30),
     fixedThroughStopId: z.string().min(1).max(100),
     expectedRevision: z.number().int().nonnegative(),
   })

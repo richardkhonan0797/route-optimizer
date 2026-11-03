@@ -4,7 +4,7 @@ Panduan deployment Vercel: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 
 
-MVP aplikasi internal distribusi Indonesia: satu gudang, satu kendaraan, 1–25 toko unik, perjalanan berangkat dan kembali ke gudang. Next.js App Router + TypeScript, Tailwind CSS + komponen Button shadcn/ui (Radix), PostgreSQL + Prisma, Zod, iron-session dan bcryptjs. Tidak memakai AI, OR-Tools, geocoding, atau peta interaktif.
+MVP aplikasi internal distribusi Indonesia: satu gudang, satu kendaraan, 1–30 toko unik, perjalanan berangkat dan kembali ke gudang. Next.js App Router + TypeScript, Tailwind CSS + komponen Button shadcn/ui (Radix), PostgreSQL + Prisma, Zod, iron-session dan bcryptjs. Tidak memakai AI, OR-Tools, geocoding, atau peta interaktif.
 
 
 
@@ -96,7 +96,7 @@ Simpan key hanya di `ORS_API_KEY` di server, tanpa prefix `NEXT_PUBLIC`. Restart
 
 
 
-Server memanggil `POST https://api.heigit.org/vroom/v0` dengan satu kendaraan `driving-car`, awal/akhir gudang, dan 1–25 job toko. Koordinat memakai `[longitude, latitude]`. Opsi `g: true` meminta jarak; geometri dibuang. Semua job harus terlayani tepat sekali. Tidak ada fallback Google atau garis lurus.
+Server memanggil `POST https://api.heigit.org/vroom/v0` dengan satu kendaraan `driving-car`, awal/akhir gudang, dan 1–30 job toko. Koordinat memakai `[longitude, latitude]`. Opsi `g: true` meminta jarak; geometri dibuang. Semua job harus terlayani tepat sekali. Tidak ada fallback Google atau garis lurus.
 
 
 
@@ -168,7 +168,7 @@ npm run build
 
 
 
-Test rutin memakai mock ORS, tidak menggunakan kuota atau key sungguhan. Mencakup koordinat 0/batas/kosong, 1–25 toko unik, permutasi indeks, payload ORS dan error, proteksi endpoint/Origin, serta kegagalan optimasi dan lease bersamaan. Production build tidak membutuhkan database aktif atau API key.
+Test rutin memakai mock ORS, tidak menggunakan kuota atau key sungguhan. Mencakup koordinat 0/batas/kosong, 1–30 toko unik, permutasi indeks, payload ORS dan error, proteksi endpoint/Origin, serta kegagalan optimasi dan lease bersamaan. Production build tidak membutuhkan database aktif atau API key.
 
 
 

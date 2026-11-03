@@ -44,7 +44,7 @@ it("sends coordinates, jobs, round trip and geometry option to HeiGIT", async ()
     options: { g: true },
   });
 });
-it.each([1, 25])("supports %i stores", async (count) => {
+it.each([1, 30])("supports %i stores", async (count) => {
   const mock = vi
     .fn<typeof fetch>()
     .mockResolvedValue(
@@ -123,7 +123,7 @@ it("validates input before network", async () => {
   const mock = vi.fn<typeof fetch>();
   for (const points of [
     [],
-    Array(26).fill(stores[0]),
+    Array(31).fill(stores[0]),
     [{ latitude: 91, longitude: 0 }],
   ])
     await expect(computeRoute(warehouse, points, mock)).rejects.toThrow();
