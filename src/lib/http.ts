@@ -57,6 +57,7 @@ export async function api(
         { error: error.issues[0]?.message ?? "Data tidak valid." },
         400,
       );
+    console.error("Unhandled API error", request.method, new URL(request.url).pathname, error);
     return json(
       {
         error:
